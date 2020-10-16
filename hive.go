@@ -74,7 +74,7 @@ func NewConnectConfiguration() *ConnectConfiguration {
 
 // Connect to zookeper to get hive hosts and then connect to hive.
 // hosts is in format host1:port1,host2:port2,host3:port3 (zookeeper hosts).
-func ConnectZookeeper(hosts string, auth string,
+func ConnectZookeeper(ctx context.Context, hosts string, auth string,
 	configuration *ConnectConfiguration) (conn *Connection, err error) {
 	// consider host as zookeeper quorum
 	zkHosts := strings.Split(hosts, ",")
@@ -97,7 +97,7 @@ func ConnectZookeeper(hosts string, auth string,
 			if err != nil {
 				continue
 			}
-			conn, err := innerConnect(node["host"], port, auth, configuration)
+			conn, err := innerConnect(ctx, node["host"], port, auth, configuration)
 			if err != nil {
 				// Let's try to connect to the next one
 				continue
@@ -114,9 +114,9 @@ func ConnectZookeeper(hosts string, auth string,
 }
 
 // Connect to hive server
-func Connect(host string, port int, auth string,
+func Connect(ctx context.Context, host string, port int, auth string,
 	configuration *ConnectConfiguration) (conn *Connection, err error) {
-	return innerConnect(host, port, auth, configuration)
+	return innerConnect(ctx, host, port, auth, configuration)
 }
 
 func parseHiveServer2Info(hsInfos []string) []map[string]string {
@@ -153,7 +153,7 @@ func parseHiveServer2Info(hsInfos []string) []map[string]string {
 	return results[0:actualCount]
 }
 
-func innerConnect(host string, port int, auth string,
+func innerConnect(ctx context.Context, host string, port int, auth string,
 	configuration *ConnectConfiguration) (conn *Connection, err error) {
 
 	var socket thrift.TTransport
@@ -278,7 +278,7 @@ func innerConnect(host string, port int, auth string,
 	openSession.Username = &configuration.Username
 	openSession.Password = &configuration.Password
 	// Context is ignored
-	response, err := client.OpenSession(context.Background(), openSession)
+	response, err := client.OpenSession(ctx, openSession)
 	if err != nil {
 		return
 	}
@@ -392,7 +392,7 @@ func (c *Cursor) WaitForCompletion(ctx context.Context) {
 	}()
 
 	for true {
-		operationStatus := c.Poll(true)
+		operationStatus := c.Poll(ctx, true)
 		if c.Err != nil {
 			return
 		}
@@ -444,14 +444,14 @@ func (c *Cursor) Execute(ctx context.Context, query string, async bool) {
 		// because if the context ends the operation can't be cancelled cleanly
 		if c.Err != nil {
 			if c.state == _CONTEXT_DONE {
-				c.handleDoneContext()
+				c.handleDoneContext(ctx)
 			}
 			return
 		}
 		c.WaitForCompletion(ctx)
 		if c.Err != nil {
 			if c.state == _CONTEXT_DONE {
-				c.handleDoneContext()
+				c.handleDoneContext(ctx)
 			} else if c.state == _ERROR {
 				c.Err = fmt.Errorf("Probably the context was over when passed to execute. This probably resulted in the message being sent but we didn't get an operation handle so it's most likely a bug in thrift")
 			}
@@ -461,21 +461,21 @@ func (c *Cursor) Execute(ctx context.Context, query string, async bool) {
 	}
 }
 
-func (c *Cursor) handleDoneContext() {
+func (c *Cursor) handleDoneContext(ctx context.Context) {
 	originalError := c.Err
 	if c.operationHandle != nil {
-		c.Cancel()
+		c.Cancel(ctx)
 		if c.Err != nil {
 			return
 		}
 	}
-	c.resetState()
+	c.resetState(ctx)
 	c.Err = originalError
 	c.state = _FINISHED
 }
 
 func (c *Cursor) executeAsync(ctx context.Context, query string) {
-	c.resetState()
+	c.resetState(ctx)
 
 	c.state = _RUNNING
 	executeReq := hiveserver.NewTExecuteStatementReq()
@@ -510,7 +510,7 @@ func (c *Cursor) executeAsync(ctx context.Context, query string) {
 }
 
 // Poll returns the current status of the last operation
-func (c *Cursor) Poll(getProgres bool) (status *hiveserver.TGetOperationStatusResp) {
+func (c *Cursor) Poll(ctx context.Context, getProgres bool) (status *hiveserver.TGetOperationStatusResp) {
 	c.Err = nil
 	progressGet := getProgres
 	pollRequest := hiveserver.NewTGetOperationStatusReq()
@@ -518,7 +518,7 @@ func (c *Cursor) Poll(getProgres bool) (status *hiveserver.TGetOperationStatusRe
 	pollRequest.GetProgressUpdate = &progressGet
 	var responsePoll *hiveserver.TGetOperationStatusResp
 	// Context ignored
-	responsePoll, c.Err = c.conn.client.GetOperationStatus(context.Background(), pollRequest)
+	responsePoll, c.Err = c.conn.client.GetOperationStatus(ctx, pollRequest)
 	if c.Err != nil {
 		return nil
 	}
@@ -530,8 +530,8 @@ func (c *Cursor) Poll(getProgres bool) (status *hiveserver.TGetOperationStatusRe
 }
 
 // Finished returns true if the last async operation has finished
-func (c *Cursor) Finished() bool {
-	operationStatus := c.Poll(true)
+func (c *Cursor) Finished(ctx context.Context) bool {
+	operationStatus := c.Poll(ctx, true)
 
 	if c.Err != nil {
 		return true
@@ -567,7 +567,7 @@ func (c *Cursor) RowMap(ctx context.Context) map[string]interface{} {
 		return nil
 	}
 
-	d := c.Description()
+	d := c.Description(ctx)
 	m := make(map[string]interface{}, len(c.queue))
 	for i := 0; i < len(c.queue); i++ {
 		columnName := d[i][0]
@@ -866,7 +866,7 @@ func isNull(nulls []byte, position int) bool {
 // Description return a map with the names of the columns and their types
 // must be called after a FetchResult request
 // a context should be added here but seems to be ignored by thrift
-func (c *Cursor) Description() [][]string {
+func (c *Cursor) Description(ctx context.Context) [][]string {
 	if c.description != nil {
 		return c.description
 	}
@@ -876,7 +876,7 @@ func (c *Cursor) Description() [][]string {
 
 	metaRequest := hiveserver.NewTGetResultSetMetadataReq()
 	metaRequest.OperationHandle = c.operationHandle
-	metaResponse, err := c.conn.client.GetResultSetMetadata(context.Background(), metaRequest)
+	metaResponse, err := c.conn.client.GetResultSetMetadata(ctx, metaRequest)
 	if err != nil {
 		c.Err = err
 		return nil
@@ -934,7 +934,7 @@ func (c *Cursor) pollUntilData(ctx context.Context, n int) (err error) {
 			fetchRequest.OperationHandle = c.operationHandle
 			fetchRequest.Orientation = hiveserver.TFetchOrientation_FETCH_NEXT
 			fetchRequest.MaxRows = c.conn.configuration.FetchSize
-			responseFetch, err := c.conn.client.FetchResults(context.Background(), fetchRequest)
+			responseFetch, err := c.conn.client.FetchResults(ctx, fetchRequest)
 			if err != nil {
 				rowsAvailable <- err
 				return
@@ -983,13 +983,12 @@ func (c *Cursor) pollUntilData(ctx context.Context, n int) (err error) {
 }
 
 // Cancels the current operation
-func (c *Cursor) Cancel() {
+func (c *Cursor) Cancel(ctx context.Context) {
 	c.Err = nil
 	cancelRequest := hiveserver.NewTCancelOperationReq()
 	cancelRequest.OperationHandle = c.operationHandle
 	var responseCancel *hiveserver.TCancelOperationResp
-	// This context is simply ignored
-	responseCancel, c.Err = c.conn.client.CancelOperation(context.Background(), cancelRequest)
+	responseCancel, c.Err = c.conn.client.CancelOperation(ctx, cancelRequest)
 	if c.Err != nil {
 		return
 	}
@@ -1000,11 +999,11 @@ func (c *Cursor) Cancel() {
 }
 
 // Close close the cursor
-func (c *Cursor) Close() {
-	c.Err = c.resetState()
+func (c *Cursor) Close(ctx context.Context) {
+	c.Err = c.resetState(ctx)
 }
 
-func (c *Cursor) resetState() error {
+func (c *Cursor) resetState(ctx context.Context) error {
 	c.response = nil
 	c.Err = nil
 	c.queue = nil
@@ -1016,8 +1015,7 @@ func (c *Cursor) resetState() error {
 	if c.operationHandle != nil {
 		closeRequest := hiveserver.NewTCloseOperationReq()
 		closeRequest.OperationHandle = c.operationHandle
-		// This context is ignored
-		responseClose, err := c.conn.client.CloseOperation(context.Background(), closeRequest)
+		responseClose, err := c.conn.client.CloseOperation(ctx, closeRequest)
 		c.operationHandle = nil
 		if err != nil {
 			return err
