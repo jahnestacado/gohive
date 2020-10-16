@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/beltran/gohive/hiveserver"
+	"github.com/jahnestacado/gohive/hiveserver"
 	"github.com/beltran/gosasl"
 	"github.com/go-zookeeper/zk"
 )

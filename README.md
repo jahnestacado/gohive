@@ -7,7 +7,7 @@ GoHive is a driver for Hive in go that supports connection mechanisms KERBEROS(G
 ## Installation
 Gohive can be installed with:
 ```
-go get github.com/beltran/gohive
+go get github.com/jahnestacado/gohive
 ```
 
 To add kerberos support gohive requires header files to build against the GSSAPI C library. They can be installed with:
@@ -17,7 +17,7 @@ To add kerberos support gohive requires header files to build against the GSSAPI
 
 Then:
 ```
-go get -tags kerberos github.com/beltran/gohive
+go get -tags kerberos github.com/jahnestacado/gohive
 ```
 
 ## Quickstart
