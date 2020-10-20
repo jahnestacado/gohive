@@ -342,13 +342,7 @@ func (c *Connection) Close(ctx context.Context) error {
 }
 
 func Exec(ctx context.Context, connection *Connection, query string) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("gohive.Exec: context timeout/cancel for query '%s'", query)
-	default:
-		return execute(ctx, connection, query)
-	}
-
+	return execute(ctx, connection, query)
 }
 
 func execute(ctx context.Context, connection *Connection, query string) error {
@@ -357,13 +351,12 @@ func execute(ctx context.Context, connection *Connection, query string) error {
 	executeReq.Statement = query
 	var responseExecute *hiveserver.TExecuteStatementResp
 	responseExecute, err := connection.client.ExecuteStatement(ctx, executeReq)
+	if err != nil {
+		return err
+	}
 
 	if !success(responseExecute.GetStatus()) {
 		return fmt.Errorf("Error while executing query: %s", responseExecute.Status.String())
-	}
-
-	if err != nil {
-		return err
 	}
 
 	return nil
