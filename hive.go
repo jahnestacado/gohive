@@ -299,7 +299,7 @@ func innerConnect(ctx context.Context, host string, port int, auth string,
 	}
 
 	if configuration.Database != "" {
-		err := execute(ctx, connection, "USE "+configuration.Database)
+		_, err := execute(ctx, connection, "USE "+configuration.Database)
 		if err != nil {
 			return nil, err
 		}
@@ -342,24 +342,52 @@ func (c *Connection) Close(ctx context.Context) error {
 }
 
 func Exec(ctx context.Context, connection *Connection, query string) error {
-	return execute(ctx, connection, query)
+	_, err := execute(ctx, connection, query)
+	return err
 }
 
-func execute(ctx context.Context, connection *Connection, query string) error {
+func Query(ctx context.Context, connection *Connection, query string) (*hiveserver.TFetchResultsResp, int, error) {
+	responseExecute, err := execute(ctx, connection, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	fetchRequest := hiveserver.NewTFetchResultsReq()
+	fetchRequest.OperationHandle = responseExecute.OperationHandle
+	fetchRequest.Orientation = hiveserver.TFetchOrientation_FETCH_NEXT
+	fetchRequest.MaxRows = connection.configuration.FetchSize
+	responseFetch, err := connection.client.FetchResults(ctx, fetchRequest)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if responseFetch.Status.StatusCode != hiveserver.TStatusCode_SUCCESS_STATUS {
+		return nil, 0, fmt.Errorf(responseFetch.Status.String())
+	}
+
+	totalRows, err := getTotalRows(responseFetch.Results.GetColumns())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return responseFetch, totalRows, nil
+
+}
+
+func execute(ctx context.Context, connection *Connection, query string) (*hiveserver.TExecuteStatementResp, error) {
 	executeReq := hiveserver.NewTExecuteStatementReq()
 	executeReq.SessionHandle = connection.sessionHandle
 	executeReq.Statement = query
 	var responseExecute *hiveserver.TExecuteStatementResp
 	responseExecute, err := connection.client.ExecuteStatement(ctx, executeReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !success(responseExecute.GetStatus()) {
-		return fmt.Errorf("Error while executing query: %s", responseExecute.Status.String())
+		return nil, fmt.Errorf("Error while executing query: %s", responseExecute.Status.String())
 	}
 
-	return nil
+	return responseExecute, nil
 }
 
 func success(status *hiveserver.TStatus) bool {
@@ -400,4 +428,29 @@ func newCookieJar() inMemoryCookieJar {
 	storage := make(map[string][]http.Cookie)
 	f := false
 	return inMemoryCookieJar{&f, storage}
+}
+
+func getTotalRows(columns []*hiveserver.TColumn) (int, error) {
+	for _, el := range columns {
+		if el.IsSetBinaryVal() {
+			return len(el.BinaryVal.Values), nil
+		} else if el.IsSetByteVal() {
+			return len(el.ByteVal.Values), nil
+		} else if el.IsSetI16Val() {
+			return len(el.I16Val.Values), nil
+		} else if el.IsSetI32Val() {
+			return len(el.I32Val.Values), nil
+		} else if el.IsSetI64Val() {
+			return len(el.I64Val.Values), nil
+		} else if el.IsSetBoolVal() {
+			return len(el.BoolVal.Values), nil
+		} else if el.IsSetDoubleVal() {
+			return len(el.DoubleVal.Values), nil
+		} else if el.IsSetStringVal() {
+			return len(el.StringVal.Values), nil
+		} else {
+			return -1, fmt.Errorf("Unrecognized column type %T", el)
+		}
+	}
+	return 0, fmt.Errorf("All columns seem empty")
 }
