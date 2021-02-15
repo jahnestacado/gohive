@@ -1,8 +1,8 @@
 github.com/apache/thrift v0.13.0 h1:5hryIiq9gtn+MiLVn0wP37kb/uTeRZgN08WoCsAhIhI=
 github.com/apache/thrift v0.13.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
+github.com/beltran/gosasl v0.0.0-20210215125809-4fa075701386 h1:6VIHWP+Cpgmp3/Owpd+G4cu7K1XxKixgP7Gihcsy+SM=
+github.com/beltran/gosasl v0.0.0-20210215125809-4fa075701386/go.mod h1:Qx8cW6jkI8riyzmklj80kAIkv+iezFUTBiGU0qHhHes=
 github.com/beltran/gssapi v0.0.0-20200324152954-d86554db4bab h1:ayfcn60tXOSYy5zUN1AMSTQo4nJCf7hrdzAVchpPst4=
 github.com/beltran/gssapi v0.0.0-20200324152954-d86554db4bab/go.mod h1:GLe4UoSyvJ3cVG+DVtKen5eAiaD8mAJFuV5PT3Eeg9Q=
 github.com/go-zookeeper/zk v1.0.1 h1:LmXNmSnkNsNKai+aDu6sHRr8ZJzIrHJo8z8Z4sm8cT8=
 github.com/go-zookeeper/zk v1.0.1/go.mod h1:gpJdHazfkmlg4V0rt0vYeHYJHSL8hHFwV0qOd+HRTJE=
-github.com/krisss85/gosasl v1.0.0 h1:Faol2JHGl6ewscU14nhQFhtk+tqmZs7a92Am4PjF3Fo=
-github.com/krisss85/gosasl v1.0.0/go.mod h1:eGzuyq+59bN+KtKNoxOMlJxxes5KZwXhcza8uf+Va1o=

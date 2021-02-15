@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/apache/thrift/lib/go/thrift"
+	"github.com/beltran/gosasl"
 	"github.com/go-zookeeper/zk"
 	"github.com/jahnestacado/gohive/hiveserver"
-	"github.com/krisss85/gosasl"
 )
 
 const DEFAULT_FETCH_SIZE int64 = 1000

@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/apache/thrift/lib/go/thrift"
-	"github.com/krisss85/gosasl"
+	"github.com/beltran/gosasl"
 )
 
 const (
